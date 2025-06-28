@@ -1,0 +1,8 @@
+# Ignore the .env file which contains secret keys
+.env
+
+# Ignore Python cache files
+__pycache__/
+
+# ADD THIS LINE: Ignore the Python virtual environment
+.my_venv/

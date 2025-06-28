@@ -1,0 +1,66 @@
+# tasks.yaml (Final Version)
+
+route_user_query:
+  description: >
+    Analyze the user's query: '{query}'.
+    Classify it as either 'ticker_specific_analysis' or 'market_wide_screening'.
+  expected_output: >
+    A JSON object with 'route' and 'extracted_info' keys.
+    Example: {{"route": "ticker_specific_analysis", "extracted_info": "MSFT"}}
+
+screen_market_for_signals:
+  description: >
+    Based on the user's request for '{query}', use your web search capabilities to identify a list of promising stock tickers
+    that are showing relevant signals *within the last trading day*.
+  expected_output: >
+    A comma-separated string of no more than 10 relevant stock ticker symbols. E.g., 'TSLA,NVDA,AMD'.
+
+analyze_technical_patterns:
+  description: >
+    Conduct a comprehensive technical analysis for the stock ticker: {ticker}.
+    You MUST use your web search tools to find the latest stock price.
+    Your analysis MUST be based on the MOST RECENT trading data from the last 24 hours.
+    **AGGRESSIVELY DISCARD any data, articles, or analysis older than this period.**
+  expected_output: >
+    A detailed technical report for {ticker}. The report must include:
+    1. The Current Stock Price you found using your search tools.
+    2. Overall Trend Assessment (Bullish, Bearish, Neutral).
+    3. Key Levels: Current Support and Resistance prices.
+    4. Indicator Status: Latest readings for RSI, MACD, and Bollinger Bands.
+
+analyze_market_sentiment:
+  description: >
+    Investigate and summarize the market sentiment for {ticker}, focusing strictly on news and social media from the **last 48 hours**.
+    Search for the latest news headlines and social media discussions.
+    **If a source is from 2023 or any period older than 48 hours, you MUST explicitly state that you are IGNORING IT as outdated.**
+  expected_output: >
+    A concise sentiment analysis report for {ticker} reflecting today's mood. It must include:
+    1. Overall Sentiment (Positive, Negative, Neutral, Mixed).
+    2. Key News/Catalysts from the last 48 hours ONLY.
+    3. Social Media Pulse from the last 48 hours ONLY.
+
+synthesize_trade_recommendation:
+  description: >
+    Act as the Chief Investment Strategist. Synthesize the technical analysis (including the latest price) and the market sentiment reports.
+    Your final recommendation MUST be based *only* on the fresh, time-filtered data provided in the context.
+    Critically evaluate if the data is recent enough to be actionable for a trade *today*.
+  expected_output: >
+    A final, structured investment advisory report. For each ticker analyzed, provide:
+    ---
+    Ticker: [Stock Ticker]
+    Current Price: [The price found in the technical report]
+    Recommendation: [Buy | Sell | Hold]
+    Confidence: [High | Medium | Low]
+    
+    Summary:
+    A concise paragraph explaining your reasoning, integrating the LATEST technical and sentiment findings.
+    
+    Key Technicals:
+    - [Brief summary of the most critical and RECENT technical point.]
+    
+    Key Sentiment:
+    - [Brief summary of the most critical and RECENT sentiment point.]
+    
+    Risks:
+    - [A bullet point list of key immediate risks to consider.]
+    ---

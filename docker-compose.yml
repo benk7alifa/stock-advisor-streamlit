@@ -1,0 +1,13 @@
+# docker-compose.yml
+
+version: '3.8'
+
+services:
+  stock-advisor:
+    build: .
+    # Mount the .env file for API key access inside the container
+    env_file:
+      - .env
+    # Make the container interactive so we can type in queries
+    stdin_open: true
+    tty: true

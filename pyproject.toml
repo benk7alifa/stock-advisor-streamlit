@@ -1,0 +1,23 @@
+[project]
+name = "stock_advisor_app_001"
+version = "0.1.0"
+description = "stock_advisor_app_001 using crewAI"
+authors = [{ name = "Your Name", email = "you@example.com" }]
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "crewai[tools]>=0.108.0,<1.0.0"
+]
+
+[project.scripts]
+stock_advisor_app_001 = "stock_advisor_app_001.main:run"
+run_crew = "stock_advisor_app_001.main:run"
+train = "stock_advisor_app_001.main:train"
+replay = "stock_advisor_app_001.main:replay"
+test = "stock_advisor_app_001.main:test"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.crewai]
+type = "crew"
