@@ -18,14 +18,23 @@ load_dotenv()
 # This new logic checks for Streamlit's secrets first,
 # and if it's not found (i.e., we are running locally),
 # it falls back to using the .env file.
+OPENAI_API_KEY = None
+SERPER_API_KEY = None
+
 try:
     # This will work when deployed on Streamlit Cloud
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
     SERPER_API_KEY = st.secrets["SERPER_API_KEY"]
-except KeyError:
+except (KeyError, FileNotFoundError):
     # This will work when running locally
+    print("Secrets not found on Streamlit, falling back to .env file.")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     SERPER_API_KEY = os.getenv("SERPER_API_KEY")
+
+# CRITICAL: Check if the keys were actually found before setting them
+if not OPENAI_API_KEY or not SERPER_API_KEY:
+    # This error will be clearly visible in the Streamlit logs
+    raise ValueError("API keys for OpenAI and Serper are not set. Please add them to your .env file or Streamlit secrets.")
 
 # Set the keys as environment variables for the tools to use
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
