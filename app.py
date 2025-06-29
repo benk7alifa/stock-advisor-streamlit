@@ -1,6 +1,13 @@
-__import__('pysqlite3')
-import sys
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+# This block attempts to import the Linux-only fix.
+# If it fails (because we are on Windows), it will be skipped.
+try:
+    __import__('pysqlite3')
+    import sys
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+except ModuleNotFoundError:
+    print("pysqlite3-binary not found, running with system's sqlite3.")
+    pass
+# Import necessary libraries
 
 import streamlit as st
 import sys

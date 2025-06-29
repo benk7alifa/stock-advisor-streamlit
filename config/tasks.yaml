@@ -1,19 +1,23 @@
-# tasks.yaml (Final Version)
+# tasks.yaml (FINAL, MOST INTELLIGENT VERSION)
 
 route_user_query:
   description: >
     Analyze the user's query: '{query}'.
-    Classify it as either 'ticker_specific_analysis' or 'market_wide_screening'.
+    Classify it as 'ticker_specific_analysis', 'market_screening', or 'general_qa'.
   expected_output: >
-    A JSON object with 'route' and 'extracted_info' keys.
-    Example: {{"route": "ticker_specific_analysis", "extracted_info": "MSFT"}}
+    A JSON object with a 'route' key and an 'extracted_info' key.
+    - If the route is 'ticker_specific_analysis', 'extracted_info' should be a comma-separated list of the identified tickers (e.g., "AAPL,MSFT").
+    - If the route is 'market_screening', 'extracted_info' should be the original user query.
+    - If the route is 'general_qa', 'extracted_info' can be null.
+    Example for screening: {{"route": "market_screening", "extracted_info": "Please suggest 2 stocks for trading next week..."}}
+    Example for ticker: {{"route": "ticker_specific_analysis", "extracted_info": "TSLA"}}
 
-screen_market_for_signals:
+screen_market_for_tickers:
   description: >
     Based on the user's request for '{query}', use your web search capabilities to identify a list of promising stock tickers
-    that are showing relevant signals *within the last trading day*.
+    that match the criteria.
   expected_output: >
-    A comma-separated string of no more than 10 relevant stock ticker symbols. E.g., 'TSLA,NVDA,AMD'.
+    A clean, comma-separated string of no more than 5 relevant stock ticker symbols. E.g., 'TSLA,NVDA,AMD'. If no tickers can be found, return an empty string.
 
 analyze_technical_patterns:
   description: >
@@ -39,28 +43,44 @@ analyze_market_sentiment:
     2. Key News/Catalysts from the last 48 hours ONLY.
     3. Social Media Pulse from the last 48 hours ONLY.
 
+# === THIS IS THE FULLY UPDATED FINAL TASK ===
 synthesize_trade_recommendation:
   description: >
-    Act as the Chief Investment Strategist. Synthesize the technical analysis (including the latest price) and the market sentiment reports.
-    Your final recommendation MUST be based *only* on the fresh, time-filtered data provided in the context.
-    Critically evaluate if the data is recent enough to be actionable for a trade *today*.
+    You are the Chief Investment Strategist and your final task is to assemble a complete report for the user.
+    The user's original query was: '{query}'.
+    You have been given context from other agents who have analyzed the following ticker: {ticker}.
+    
+    Your job is to create a final report for THIS ONE TICKER.
+    
+    First, you must decide if this stock, based on the provided analysis, is a good recommendation that FULFILLS the user's original query.
+    Then, create a report in the specified format. The summary section is the most important part to get right, as it must explain your reasoning and link back to the user's request.
   expected_output: >
-    A final, structured investment advisory report. For each ticker analyzed, provide:
+    A final, structured investment advisory report for the SINGLE stock: {ticker}.
+    The report MUST start with a "---" separator and end with a "---" separator. Nothing else.
+    Use proper Markdown with a single space after colons and new lines between each section for perfect formatting.
+
     ---
-    Ticker: [Stock Ticker]
-    Current Price: [The price found in the technical report]
-    Recommendation: [Buy | Sell | Hold]
-    Confidence: [High | Medium | Low]
-    
-    Summary:
-    A concise paragraph explaining your reasoning, integrating the LATEST technical and sentiment findings.
-    
-    Key Technicals:
-    - [Brief summary of the most critical and RECENT technical point.]
-    
-    Key Sentiment:
-    - [Brief summary of the most critical and RECENT sentiment point.]
-    
-    Risks:
+    **Ticker:** {ticker}
+
+    **Current Price:** [The price from the technical report]
+
+    **Recommendation:** [Buy | Sell | Hold | Not Recommended]
+    *Your recommendation should be 'Buy' or 'Sell' ONLY if it strongly meets the user's original query criteria. Otherwise, it should be 'Hold' or 'Not Recommended'.*
+
+    **Confidence:** [High | Medium | Low]
+
+    **Summary:**
+    A concise paragraph explaining your reasoning.
+    START by stating whether this stock meets the user's original criteria and why.
+    For example: "This stock is NOT a good candidate to meet your request for a low-risk trade because..." or "This stock is a strong candidate to meet your request because..."
+    Then, integrate the key technical and sentiment findings to justify your conclusion.
+
+    **Key Technicals:**
+    - [A single bullet point summarizing the most critical and RECENT technical finding.]
+
+    **Key Sentiment:**
+    - [A single bullet point summarizing the most critical and RECENT sentiment finding.]
+
+    **Risks:**
     - [A bullet point list of key immediate risks to consider.]
     ---
