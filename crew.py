@@ -1,4 +1,4 @@
-# --- Your FINAL, FINAL, CORRECTED crew.py ---
+# --- FINAL, v2 - CORRECTED crew.py ---
 
 import os
 import json
@@ -11,9 +11,9 @@ from crewai import Agent, Crew, Process, Task
 from langchain_openai import ChatOpenAI
 from crewai_tools import SerperDevTool, ScrapeWebsiteTool
 
-# Load environment variables (no changes)
 load_dotenv()
 
+# --- Secure and Flexible API Key Handling ---
 OPENAI_API_KEY = None
 SERPER_API_KEY = None
 try:
@@ -45,14 +45,17 @@ class StockAnalysisCrew:
     def _create_agent(self, name: str, extra_tools: list = None) -> Agent:
         agent_config = self.agents_config[name]
         tools = extra_tools if extra_tools else []
+        verbose_flag = agent_config.get('verbose', False)
         return Agent(
-            **agent_config,
+            role=agent_config['role'],
+            goal=agent_config['goal'],
+            backstory=agent_config['backstory'],
             llm=self.llm,
             tools=tools,
             allow_delegation=False,
+            verbose=verbose_flag
         )
 
-    # === FIX #1: Update the function to accept 'query' ===
     def _run_analysis_crew(self, ticker: str, query: str) -> str:
         """Runs the sequential analysis crew for a single stock ticker."""
         technical_analyst = self._create_agent('technical_analyst', [self.search_tool, self.scrape_tool])
@@ -72,7 +75,6 @@ class StockAnalysisCrew:
         )
         
         synthesis_task = Task(
-            # Now we can pass BOTH ticker and query
             description=self.tasks_config['synthesize_trade_recommendation']['description'].format(ticker=ticker, query=query),
             expected_output=self.tasks_config['synthesize_trade_recommendation']['expected_output'].format(ticker=ticker),
             agent=recommendation_architect,
@@ -121,7 +123,6 @@ class StockAnalysisCrew:
             final_reports = []
             for ticker in tickers_to_analyze:
                 print(f"\n--- Analyzing Ticker: {ticker} ---")
-                # === FIX #2: Pass the 'query' variable when calling the function ===
                 report = self._run_analysis_crew(ticker, query)
                 final_reports.append(report)
             return "\n\n".join(final_reports)
@@ -146,13 +147,48 @@ class StockAnalysisCrew:
             print(f"--- Screener found tickers: {ticker_list_str} ---")
             tickers_to_analyze = [ticker.strip().upper() for ticker in ticker_list_str.split(',')]
             
-            final_reports = []
+            detailed_reports = []
             for ticker in tickers_to_analyze:
                 print(f"\n--- Analyzing Ticker: {ticker} ---")
-                # === FIX #2: Pass the 'query' variable when calling the function ===
                 report = self._run_analysis_crew(ticker, query)
-                final_reports.append(report)
-            return "\n\n".join(final_reports)
+                detailed_reports.append(report)
+            
+            # === FINAL SUMMARY STEP (CORRECTED) ===
+            print("\n--- Assembling Final Executive Summary ---")
+
+            summarizer_agent = self._create_agent('executive_summarizer_agent')
+            
+            # First, join the reports into a single string variable.
+            full_context_for_summary = "\n\n".join(detailed_reports)
+
+            # Then, create the final, clear description for the summarizer's task using the variable.
+            summary_task_description = f"""
+            Review the following collection of stock analyses provided below, inside the 'ANALYSIS REPORTS' section.
+            The user's original request was: '{query}'.
+
+            Your task is to write a final, top-level executive summary that will be presented to the user. This summary must directly and clearly answer the user's original question.
+
+            ANALYSIS REPORTS:
+            {full_context_for_summary}
+            """
+
+            summary_task = Task(
+                description=summary_task_description,
+                expected_output=self.tasks_config['summarize_findings']['expected_output'],
+                agent=summarizer_agent
+            )
+
+            summary_crew = Crew(
+                agents=[summarizer_agent],
+                tasks=[summary_task],
+                verbose=True
+            )
+
+            final_summary = summary_crew.kickoff()
+            final_summary_text = final_summary.raw if hasattr(final_summary, 'raw') else str(final_summary)
+
+            # Combine the executive summary with the detailed reports for the final output
+            return f"{final_summary_text}\n\n## Detailed Analysis of Candidates\n\n" + full_context_for_summary
 
         elif route == 'general_qa':
             return "Thank you for your question. This version of the advisor is optimized for stock analysis and screening. Please ask a question about a specific stock or ask me to find stocks with certain criteria."

@@ -1,4 +1,4 @@
-# tasks.yaml (FINAL, MOST INTELLIGENT VERSION)
+# tasks.yaml (FINAL VERSION)
 
 route_user_query:
   description: >
@@ -43,21 +43,19 @@ analyze_market_sentiment:
     2. Key News/Catalysts from the last 48 hours ONLY.
     3. Social Media Pulse from the last 48 hours ONLY.
 
-# === THIS IS THE FULLY UPDATED FINAL TASK ===
 synthesize_trade_recommendation:
   description: >
     You are the Chief Investment Strategist and your final task is to assemble a complete report for the user.
     The user's original query was: '{query}'.
     You have been given context from other agents who have analyzed the following ticker: {ticker}.
-    
     Your job is to create a final report for THIS ONE TICKER.
-    
     First, you must decide if this stock, based on the provided analysis, is a good recommendation that FULFILLS the user's original query.
     Then, create a report in the specified format. The summary section is the most important part to get right, as it must explain your reasoning and link back to the user's request.
   expected_output: >
     A final, structured investment advisory report for the SINGLE stock: {ticker}.
     The report MUST start with a "---" separator and end with a "---" separator. Nothing else.
     Use proper Markdown with a single space after colons and new lines between each section for perfect formatting.
+    All bullet points under 'Key Technicals', 'Key Sentiment', and 'Risks' MUST start with a '- ' (a dash followed by a space).
 
     ---
     **Ticker:** {ticker}
@@ -84,3 +82,17 @@ synthesize_trade_recommendation:
     **Risks:**
     - [A bullet point list of key immediate risks to consider.]
     ---
+
+# === NEW TASK ADDED AT THE END ===
+summarize_findings:
+  description: >
+    Review the collection of stock analyses provided in the context. The user's original request was: '{query}'.
+    Your task is to write a final, top-level executive summary that will be presented to the user.
+    This summary must directly and clearly answer the user's original question.
+  expected_output: >
+    A final, user-friendly executive summary.
+    1. Start with a direct answer to the user's query.
+       - If any stocks met the criteria, say something like: "Based on my analysis, I found [Number] stock(s) that meet your criteria for [user's criteria]. I would recommend considering [Ticker(s)]."
+       - If no stocks met the criteria, say something like: "Based on my analysis, I could not find any stocks that strongly met your criteria for [user's criteria] at this time. The candidates I evaluated showed too much risk or not enough upside."
+    2. Provide a brief, 2-3 sentence overview of the general market conditions or the reasons why candidates were or were not suitable.
+    3. Conclude by stating that the detailed reports for each evaluated stock are provided below for their review.
