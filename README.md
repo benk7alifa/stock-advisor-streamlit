@@ -52,3 +52,12 @@ For support, questions, or feedback regarding the StockAdvisorApp001 Crew or cre
 - [Chat with our docs](https://chatg.pt/DWjSBZn)
 
 Let's create wonders together with the power and simplicity of crewAI.
+
+
+
+# AI Stock Trading Advisor
+
+This is a Streamlit application for stock analysis using CrewAI.
+
+---
+*Force redeploy v1.2.1*
