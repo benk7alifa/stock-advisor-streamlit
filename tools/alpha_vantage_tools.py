@@ -1,101 +1,76 @@
-# tools/alpha_vantage_tools.py (REFACTORED to use BaseTool)
+# tools/alpha_vantage_tools.py
 
 import os
-import requests
-import json
-from langchain.tools import BaseTool
-from dotenv import load_dotenv
+import pandas as pd
+from alpha_vantage.timeseries import TimeSeries
 
-load_dotenv()
+# Load your API key (correct env var name)
+API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
+if not API_KEY:
+    raise ValueError("Set ALPHA_VANTAGE_API_KEY in your .env or Streamlit secrets")
 
-def get_alpha_vantage_api_key():
-    """Helper function to securely get the Alpha Vantage API key."""
-    api_key = os.getenv("ALPHA_VANTAGE_API_KEY")
-    if not api_key:
+# Initialize the client using the free TIME_SERIES_DAILY endpoint
+ts = TimeSeries(key=API_KEY, output_format="pandas", indexing_type="date")
+
+
+def get_sp500_tickers() -> list[str]:
+    """Fetch the current S&P 500 constituents from Wikipedia."""
+    table = pd.read_html(
+        "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    )[0]
+    return table.Symbol.tolist()
+
+
+def alpha_vantage_screen(
+    n: int,
+    risk_band: tuple[float, float],
+    min_return: float,
+    return_window_days: int = 5,
+) -> list[str]:
+    """
+    Screen the S&P 500 for:
+      • daily volatility in risk_band
+      • cumulative return over return_window_days ≥ min_return
+    Returns up to n tickers that match, with debug prints.
+    """
+    candidates = []
+    universe = get_sp500_tickers()
+    total = len(universe)
+    print(f"--- alpha_vantage_screen: universe size = {total} tickers ---")
+
+    for idx, symbol in enumerate(universe, start=1):
+        print(f"[{idx}/{total}] Fetching daily for {symbol}…")
         try:
-            import streamlit as st
-            api_key = st.secrets.get("ALPHA_VANTAGE_API_KEY")
-        except (ImportError, AttributeError, KeyError):
-            api_key = None
-    if not api_key:
-        raise ValueError("Alpha Vantage API key not found. Please set it in your .env file or Streamlit secrets.")
-    return api_key
-
-class GetDailyTimeSeriesTool(BaseTool):
-    name: str = "Get Daily Time Series Stock Data"
-    description: str = (
-        "Fetches the daily time series (last 100 days) for a given stock symbol from Alpha Vantage. "
-        "This includes open, high, low, close prices, and volume. The most recent data point contains the latest closing price. "
-        "Use this tool as your primary source for all technical analysis, including getting the current stock price."
-    )
-
-    def _run(self, symbol: str) -> str:
-        api_key = get_alpha_vantage_api_key()
-        base_url = "https://www.alphavantage.co/query"
-        params = {
-            "function": "TIME_SERIES_DAILY_ADJUSTED",
-            "symbol": symbol,
-            "apikey": api_key,
-            "outputsize": "compact"
-        }
-        try:
-            response = requests.get(base_url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            
-            if "Error Message" in data:
-                return f"Error fetching data for {symbol}: {data['Error Message']}"
-            
-            time_series = data.get("Time Series (Daily)", {})
-            if not time_series:
-                return f"No daily time series data found for {symbol}. The symbol might be incorrect or delisted."
-
-            simplified_data = {
-                "symbol": symbol,
-                "last_refreshed": data.get("Meta Data", {}).get("3. Last Refreshed"),
-                "recent_data": {day: values for day, values in list(time_series.items())[:30]}
-            }
-            return json.dumps(simplified_data, indent=2)
-
-        except requests.exceptions.RequestException as e:
-            return f"An error occurred during API request: {e}"
+            # FREE endpoint
+            data, _ = ts.get_daily(symbol=symbol, outputsize="compact")
         except Exception as e:
-            return f"An unexpected error occurred: {e}"
+            print(f"    → Skipping {symbol}: {e}")
+            continue
 
-class GetNewsSentimentTool(BaseTool):
-    name: str = "Get News and Sentiment for a Stock"
-    description: str = (
-        "Fetches recent news articles and their sentiment scores for a given stock symbol from Alpha Vantage. "
-        "The data is already filtered to be recent. Do not perform extra web searches for news. "
-        "Use this tool for all sentiment analysis tasks."
-    )
+        # '4. close' is the standard close price in get_daily
+        if '4. close' not in data:
+            print(f"    → No close price for {symbol}, skipping")
+            continue
 
-    def _run(self, symbol: str) -> str:
-        api_key = get_alpha_vantage_api_key()
-        base_url = "https://www.alphavantage.co/query"
-        params = {
-            "function": "NEWS_SENTIMENT",
-            "tickers": symbol,
-            "apikey": api_key,
-            "limit": "20"
-        }
-        try:
-            response = requests.get(base_url, params=params)
-            response.raise_for_status()
-            data = response.json()
+        close = data["4. close"].sort_index()
+        returns = close.pct_change().dropna()
+        vol = returns.std()
 
-            if not data or 'feed' not in data or not data['feed']:
-                 return f"No news or sentiment data found for {symbol}."
+        # Volatility filter
+        if not (risk_band[0] <= vol <= risk_band[1]):
+            continue
 
-            simplified_feed = [{
-                "title": item.get('title'),
-                "summary": item.get('summary'),
-                "overall_sentiment_score": item.get('overall_sentiment_score'),
-                "overall_sentiment_label": item.get('overall_sentiment_label')
-            } for item in data.get('feed', [])]
-            return json.dumps(simplified_feed, indent=2)
-            
-        except requests.exceptions.RequestException as e:
-            return f"An error occurred during API request: {e}"
-        except Exception as e:
-            return f"An unexpected error occurred: {e}"
+        # Enough history?
+        if len(close) < return_window_days + 1:
+            continue
+
+        cum_ret = close.iloc[-1] / close.iloc[-(return_window_days + 1)] - 1
+        if cum_ret >= min_return:
+            print(f"    → Candidate {symbol}: vol={vol:.4%}, ret={cum_ret:.2%}")
+            candidates.append(symbol)
+
+        if len(candidates) >= n:
+            break
+
+    print(f"--- Screening complete: found {len(candidates)} candidate(s) ---")
+    return candidates
