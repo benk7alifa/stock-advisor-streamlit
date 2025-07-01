@@ -1,5 +1,3 @@
-# --- FINAL, v2 - CORRECTED crew.py ---
-
 import os
 import json
 import yaml
@@ -31,12 +29,16 @@ os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 os.environ["SERPER_API_KEY"] = SERPER_API_KEY
 # --- End of Key Handling ---
 
+
 class StockAnalysisCrew:
     def __init__(self):
         self.llm = ChatOpenAI(model="gpt-4o-mini")
-        with open('config/agents.yaml', 'r') as f:
+
+        # reliably load config files relative to this file
+        base_dir = Path(__file__).resolve().parent
+        with open(base_dir / 'config' / 'agents.yaml', 'r') as f:
             self.agents_config = yaml.safe_load(f)
-        with open('config/tasks.yaml', 'r') as f:
+        with open(base_dir / 'config' / 'tasks.yaml', 'r') as f:
             self.tasks_config = yaml.safe_load(f)
 
         self.search_tool = SerperDevTool()
@@ -67,13 +69,13 @@ class StockAnalysisCrew:
             expected_output=self.tasks_config['analyze_technical_patterns']['expected_output'],
             agent=technical_analyst
         )
-        
+
         sentiment_analysis_task = Task(
             description=self.tasks_config['analyze_market_sentiment']['description'].format(ticker=ticker),
             expected_output=self.tasks_config['analyze_market_sentiment']['expected_output'],
             agent=sentiment_analyst
         )
-        
+
         synthesis_task = Task(
             description=self.tasks_config['synthesize_trade_recommendation']['description'].format(ticker=ticker, query=query),
             expected_output=self.tasks_config['synthesize_trade_recommendation']['expected_output'].format(ticker=ticker),
@@ -95,103 +97,78 @@ class StockAnalysisCrew:
         query = inputs['query']
         print(f"--- Running routing for query: {query} ---")
 
+        # 1) Route the user query
         router_agent = self._create_agent('router_agent')
         routing_task = Task(
             description=self.tasks_config['route_user_query']['description'].format(query=query),
             expected_output=self.tasks_config['route_user_query']['expected_output'],
             agent=router_agent
         )
-
         routing_crew = Crew(agents=[router_agent], tasks=[routing_task], verbose=True)
         routing_result = routing_crew.kickoff()
 
+        # ── NEW: safely extract text from result.raw or fallback to str(...)
+        routing_output = routing_result.raw if hasattr(routing_result, 'raw') else str(routing_result)
         try:
-            routing_decision = json.loads(routing_result.raw)
+            routing_decision = json.loads(routing_output)
         except (json.JSONDecodeError, TypeError):
-            print(f"--- Error: Could not parse routing decision. Raw output: {routing_result.raw if hasattr(routing_result, 'raw') else routing_result} ---")
+            print(f"--- Error: Could not parse routing decision. Raw output: {routing_output} ---")
             return "Error: The router's response was unclear. Please rephrase your query."
-        
+
         print(f"--- Routing Decision: {routing_decision} ---")
-        
         route = routing_decision.get('route')
         extracted_info = routing_decision.get('extracted_info')
-        
-        if route == 'ticker_specific_analysis':
-            print(f"--- Ticker-Specific Analysis for: {extracted_info} ---")
-            tickers_to_analyze = [ticker.strip().upper() for ticker in extracted_info.split(',')]
-            
-            final_reports = []
-            for ticker in tickers_to_analyze:
-                print(f"\n--- Analyzing Ticker: {ticker} ---")
-                report = self._run_analysis_crew(ticker, query)
-                final_reports.append(report)
-            return "\n\n".join(final_reports)
 
+        # 2) Handle ticker-specific analysis
+        if route == 'ticker_specific_analysis':
+            tickers_to_analyze = [t.strip().upper() for t in extracted_info.split(',')]
+            reports = [self._run_analysis_crew(t, query) for t in tickers_to_analyze]
+            return "\n\n".join(reports)
+
+        # 3) Handle market screening
         elif route == 'market_screening':
-            print(f"--- Market Screening for query: {extracted_info} ---")
             screener_agent = self._create_agent('stock_screener_agent', [self.search_tool, self.scrape_tool])
             screening_task = Task(
                 description=self.tasks_config['screen_market_for_tickers']['description'].format(query=extracted_info),
                 expected_output=self.tasks_config['screen_market_for_tickers']['expected_output'],
                 agent=screener_agent
             )
-
             screening_crew = Crew(agents=[screener_agent], tasks=[screening_task], verbose=True)
-            
             screening_result = screening_crew.kickoff()
-            ticker_list_str = screening_result.raw if hasattr(screening_result, 'raw') else str(screening_result)
 
-            if not ticker_list_str or not ticker_list_str.strip():
+            ticker_list_str = screening_result.raw if hasattr(screening_result, 'raw') else str(screening_result)
+            if not ticker_list_str.strip():
                 return "The market screener was unable to find any stocks matching your criteria."
 
-            print(f"--- Screener found tickers: {ticker_list_str} ---")
-            tickers_to_analyze = [ticker.strip().upper() for ticker in ticker_list_str.split(',')]
-            
-            detailed_reports = []
-            for ticker in tickers_to_analyze:
-                print(f"\n--- Analyzing Ticker: {ticker} ---")
-                report = self._run_analysis_crew(ticker, query)
-                detailed_reports.append(report)
-            
-            # === FINAL SUMMARY STEP (CORRECTED) ===
-            print("\n--- Assembling Final Executive Summary ---")
+            tickers = [t.strip().upper() for t in ticker_list_str.split(',')]
+            details = [self._run_analysis_crew(t, query) for t in tickers]
 
+            # Final executive summary
             summarizer_agent = self._create_agent('executive_summarizer_agent')
-            
-            # First, join the reports into a single string variable.
-            full_context_for_summary = "\n\n".join(detailed_reports)
-
-            # Then, create the final, clear description for the summarizer's task using the variable.
-            summary_task_description = f"""
-            Review the following collection of stock analyses provided below, inside the 'ANALYSIS REPORTS' section.
-            The user's original request was: '{query}'.
-
-            Your task is to write a final, top-level executive summary that will be presented to the user. This summary must directly and clearly answer the user's original question.
-
-            ANALYSIS REPORTS:
-            {full_context_for_summary}
-            """
-
+            full_context = "\n\n".join(details)
             summary_task = Task(
-                description=summary_task_description,
+                description=(
+                    f"Review the following collection of stock analyses provided below, inside the 'ANALYSIS REPORTS' section.\n"
+                    f"The user's original request was: '{query}'.\n\n"
+                    f"ANALYSIS REPORTS:\n{full_context}"
+                ),
                 expected_output=self.tasks_config['summarize_findings']['expected_output'],
                 agent=summarizer_agent
             )
+            summary_crew = Crew(agents=[summarizer_agent], tasks=[summary_task], verbose=True)
+            summary_result = summary_crew.kickoff()
+            final_summary = summary_result.raw if hasattr(summary_result, 'raw') else str(summary_result)
 
-            summary_crew = Crew(
-                agents=[summarizer_agent],
-                tasks=[summary_task],
-                verbose=True
+            return f"{final_summary}\n\n## Detailed Analysis of Candidates\n\n{full_context}"
+
+        # 4) Handle general QA fallback
+        elif route == 'general_qa':
+            return (
+                "Thank you for your question. This version of the advisor is optimized for stock analysis "
+                "and screening. Please ask a question about a specific stock or ask me to find stocks "
+                "with certain criteria."
             )
 
-            final_summary = summary_crew.kickoff()
-            final_summary_text = final_summary.raw if hasattr(final_summary, 'raw') else str(final_summary)
-
-            # Combine the executive summary with the detailed reports for the final output
-            return f"{final_summary_text}\n\n## Detailed Analysis of Candidates\n\n" + full_context_for_summary
-
-        elif route == 'general_qa':
-            return "Thank you for your question. This version of the advisor is optimized for stock analysis and screening. Please ask a question about a specific stock or ask me to find stocks with certain criteria."
-        
+        # 5) Unknown route
         else:
             return "Error: The router failed to classify the query correctly. Please try again."

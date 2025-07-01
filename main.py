@@ -1,12 +1,9 @@
-import sys
-from pathlib import Path
+from crew import StockAnalysisCrew
 
 def run_crew(query: str):
-    from stock_advisor_app_001.crew import StockAnalysisCrew
     inputs = {'query': query}
     try:
-        crew_result = StockAnalysisCrew().kickoff(inputs=inputs)
-        return crew_result
+        return StockAnalysisCrew().kickoff(inputs=inputs)
     except Exception as e:
         return f"An unexpected error occurred while running the crew: {e}"
 
@@ -38,7 +35,4 @@ def main():
             print(f"\nAn unexpected error occurred in the main loop: {e}")
 
 if __name__ == "__main__":
-    src_path = Path(__file__).resolve().parents[1]
-    if str(src_path) not in sys.path:
-        sys.path.append(str(src_path))
     main()
