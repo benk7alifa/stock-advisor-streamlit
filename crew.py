@@ -1,4 +1,4 @@
-# crew.py (FINAL CORRECTED - Boolean Verbosity)
+# crew.py (FINAL - Corrected SyntaxError)
 
 import os
 import json
@@ -7,27 +7,52 @@ from dotenv import load_dotenv
 from pathlib import Path
 import streamlit as st
 
+# --- DEVELOPMENT/PRODUCTION SWITCH ---
+USE_MOCK_DATA = False # Set to False to use the live API
+
+# Force load .env file at the very start
+load_dotenv()
+
 from crewai import Agent, Crew, Process, Task
 from langchain_openai import ChatOpenAI
 from crewai_tools import SerperDevTool
 
-# --- Import our custom tool INSTANCES ---
-from tools.alpha_vantage_tools import (
-    fundamental_data_tool,
-    technical_data_tool,
-    news_sentiment_tool
-)
+# --- Conditional Tool Importing ---
+if USE_MOCK_DATA:
+    # This uses triple quotes for a valid multi-line string
+    print("""
+---
+--- MOCK DATA MODE ACTIVATED ---
+---
+""")
+    from tools.mock_alpha_vantage_tools import (
+        fundamental_data_tool,
+        premium_technical_analysis_tool,
+        news_sentiment_tool,
+        daily_price_tool
+    )
+else:
+    # This also uses triple quotes for a valid multi-line string
+    print("""
+---
+--- LIVE API MODE ACTIVATED ---
+---
+""")
+    from tools.alpha_vantage_tools import (
+        fundamental_data_tool,
+        premium_technical_analysis_tool,
+        news_sentiment_tool,
+        daily_price_tool
+    )
 
-load_dotenv()
-
-# --- API Key Handling ---
-if "OPENAI_API_KEY" not in os.environ:
-    os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
-if "SERPER_API_KEY" not in os.environ:
-    os.environ["SERPER_API_KEY"] = st.secrets["SERPER_API_KEY"]
-if "ALPHA_VANTAGE_API_KEY" not in os.environ:
-    os.environ["ALPHA_VANTAGE_API_KEY"] = st.secrets["ALPHA_VANTAGE_API_KEY"]
-
+# API Key Handling
+try:
+    os.environ["OPENAI_API_KEY"] = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY"))
+    os.environ["SERPER_API_KEY"] = st.secrets.get("SERPER_API_KEY", os.getenv("SERPER_API_KEY"))
+    # Using the hardcoded key for testing
+    os.environ["ALPHA_VANTAGE_API_KEY"] = "4A8LNUNXGL1ZH740" 
+except (KeyError, FileNotFoundError, AttributeError):
+    pass
 
 class StockAnalysisCrew:
     def __init__(self):
@@ -40,7 +65,6 @@ class StockAnalysisCrew:
         self.search_tool = SerperDevTool()
 
     def _create_agent(self, name: str, tools: list) -> Agent:
-        """Helper function to create an agent from the YAML config."""
         agent_config = self.agents_config[name]
         return Agent(
             role=agent_config['role'],
@@ -49,24 +73,24 @@ class StockAnalysisCrew:
             llm=self.llm,
             tools=tools,
             allow_delegation=False,
-            verbose=agent_config.get('verbose', True)
+            verbose=True
         )
 
     def _run_analysis_crew(self, ticker: str, query: str) -> str:
-        """Runs the hierarchical analysis crew for a single stock ticker."""
         fundamental_analyst = self._create_agent('fundamental_analyst', [fundamental_data_tool])
-        technical_analyst = self._create_agent('technical_analyst', [technical_data_tool])
+        technical_analyst = self._create_agent('technical_analyst', [premium_technical_analysis_tool])
+        quantitative_strategist = self._create_agent('quantitative_strategist', [daily_price_tool])
         sentiment_analyst = self._create_agent('sentiment_analyst', [news_sentiment_tool])
         recommendation_architect = self._create_agent('recommendation_architect', [])
-
+        
         fundamental_task = Task(
             description=self.tasks_config['analyze_fundamentals']['description'].format(ticker=ticker),
             expected_output=self.tasks_config['analyze_fundamentals']['expected_output'],
             agent=fundamental_analyst
         )
-        technical_task = Task(
-            description=self.tasks_config['analyze_technical_patterns']['description'].format(ticker=ticker),
-            expected_output=self.tasks_config['analyze_technical_patterns']['expected_output'],
+        technical_indicator_task = Task(
+            description=self.tasks_config['analyze_technical_indicators']['description'].format(ticker=ticker),
+            expected_output=self.tasks_config['analyze_technical_indicators']['expected_output'],
             agent=technical_analyst
         )
         sentiment_task = Task(
@@ -74,50 +98,59 @@ class StockAnalysisCrew:
             expected_output=self.tasks_config['analyze_market_sentiment']['expected_output'],
             agent=sentiment_analyst
         )
+        strategy_task = Task(
+            description=self.tasks_config['develop_trading_strategy']['description'].format(ticker=ticker),
+            expected_output=self.tasks_config['develop_trading_strategy']['expected_output'],
+            agent=quantitative_strategist,
+            context=[technical_indicator_task]
+        )
         synthesis_task = Task(
             description=self.tasks_config['synthesize_trade_recommendation']['description'].format(ticker=ticker, query=query),
             expected_output=self.tasks_config['synthesize_trade_recommendation']['expected_output'].format(ticker=ticker),
             agent=recommendation_architect,
-            context=[fundamental_task, technical_task, sentiment_task]
+            context=[fundamental_task, technical_indicator_task, sentiment_task, strategy_task]
         )
         
         analysis_crew = Crew(
-            agents=[fundamental_analyst, technical_analyst, sentiment_analyst, recommendation_architect],
-            tasks=[fundamental_task, technical_task, sentiment_task, synthesis_task],
-            process=Process.hierarchical,
-            manager_llm=self.llm,
-            verbose=True  # <-- CORRECTED
+            agents=[
+                fundamental_analyst, technical_analyst, sentiment_analyst, 
+                quantitative_strategist, recommendation_architect
+            ],
+            tasks=[
+                fundamental_task, technical_indicator_task, sentiment_task, 
+                strategy_task, synthesis_task
+            ],
+            process=Process.sequential,
+            verbose=True
         )
         analysis_result = analysis_crew.kickoff()
         return str(analysis_result)
 
     def kickoff(self, inputs: dict):
-        """The main entry point for the application."""
         query = inputs['query']
         print(f"--- Running routing for query: {query} ---")
-
         router_agent = self._create_agent('router_agent', [])
         routing_task = Task(
             description=self.tasks_config['route_user_query']['description'].format(query=query),
             expected_output=self.tasks_config['route_user_query']['expected_output'],
             agent=router_agent
         )
-        routing_crew = Crew(
-            agents=[router_agent], 
-            tasks=[routing_task], 
-            verbose=True  # <-- CORRECTED
-        )
+        routing_crew = Crew(agents=[router_agent], tasks=[routing_task], verbose=True)
         routing_result = routing_crew.kickoff()
         
         try:
-            cleaned_result = str(routing_result).strip()
-            if cleaned_result.startswith("```json"):
-                cleaned_result = cleaned_result[7:-3].strip()
-            routing_decision = json.loads(cleaned_result)
-        except (json.JSONDecodeError, TypeError) as e:
+            raw_output = str(routing_result)
+            json_start = raw_output.find('{')
+            json_end = raw_output.rfind('}') + 1
+            if json_start != -1 and json_end > json_start:
+                json_string = raw_output[json_start:json_end]
+                routing_decision = json.loads(json_string)
+            else:
+                raise ValueError("No valid JSON object found in the router's output.")
+        except (json.JSONDecodeError, ValueError) as e:
             print(f"--- Error: Could not parse routing decision. Raw output: {routing_result}. Error: {e} ---")
             return "Error: The router's response was unclear. Please rephrase your query."
-
+        
         print(f"--- Routing Decision: {routing_decision} ---")
         route = routing_decision.get('route')
         extracted_info = routing_decision.get('extracted_info')
@@ -136,11 +169,7 @@ class StockAnalysisCrew:
                 expected_output=self.tasks_config['screen_market_for_tickers']['expected_output'],
                 agent=screener_agent
             )
-            screening_crew = Crew(
-                agents=[screener_agent], 
-                tasks=[screening_task], 
-                verbose=True  # <-- CORRECTED
-            )
+            screening_crew = Crew(agents=[screener_agent], tasks=[screening_task], verbose=True)
             screening_result = screening_crew.kickoff()
             ticker_list_str = str(screening_result)
             
@@ -158,11 +187,7 @@ class StockAnalysisCrew:
                 agent=summarizer_agent,
                 context=details
             )
-            summary_crew = Crew(
-                agents=[summarizer_agent], 
-                tasks=[summary_task], 
-                verbose=True  # <-- CORRECTED
-            )
+            summary_crew = Crew(agents=[summarizer_agent], tasks=[summary_task], verbose=True)
             summary_result = summary_crew.kickoff()
             final_summary = str(summary_result)
             
