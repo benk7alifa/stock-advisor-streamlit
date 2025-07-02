@@ -1,8 +1,27 @@
-# Ignore the .env file which contains secret keys
-.env
-
-# Ignore Python cache files
-__pycache__/
-
-# ADD THIS LINE: Ignore the Python virtual environment
+# Python virtual environment
 .my_venv/
+venv/
+*.venv
+
+# Environment variables
+.env
+.env.*
+secrets.toml  # For Streamlit secrets, never commit these!
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE and OS specific files
+.vscode/
+.DS_Store
+.idea/
+
+# Build and distribution artifacts
+build/
+dist/
+*.egg-info/
+
+# Log files
+*.log

@@ -1,7 +1,15 @@
+# requirements.txt (Minimalist approach)
+
+# Core application frameworks
 streamlit
 crewai
 crewai-tools
-python-dotenv
+
+# LLM and utility libraries
 langchain-openai
+python-dotenv
 pyyaml
+
+# Data fetching libraries
 requests
+alpha-vantage

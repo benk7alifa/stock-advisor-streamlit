@@ -1,5 +1,6 @@
-# tasks.yaml (FINAL VERSION)
+# tasks.yaml (Updated for Comprehensive Technical Analysis)
 
+# --- ROUTING/SCREENING TASKS (Unchanged) ---
 route_user_query:
   description: >
     Analyze the user's query: '{query}'.
@@ -9,8 +10,6 @@ route_user_query:
     - If the route is 'ticker_specific_analysis', 'extracted_info' should be a comma-separated list of the identified tickers (e.g., "AAPL,MSFT").
     - If the route is 'market_screening', 'extracted_info' should be the original user query.
     - If the route is 'general_qa', 'extracted_info' can be null.
-    Example for screening: {{"route": "market_screening", "extracted_info": "Please suggest 2 stocks for trading next week..."}}
-    Example for ticker: {{"route": "ticker_specific_analysis", "extracted_info": "TSLA"}}
 
 screen_market_for_tickers:
   description: >
@@ -19,80 +18,88 @@ screen_market_for_tickers:
   expected_output: >
     A clean, comma-separated string of no more than 5 relevant stock ticker symbols. E.g., 'TSLA,NVDA,AMD'. If no tickers can be found, return an empty string.
 
+# --- ANALYSIS TASKS (Technical task is heavily modified) ---
+analyze_fundamentals:
+  description: >
+    Conduct a comprehensive fundamental analysis for the stock ticker: {ticker}.
+    You MUST use the `get_fundamental_data` tool to get the company's overview.
+    Do not use any other tools.
+  expected_output: >
+    A detailed report on the company's fundamentals. The report must include:
+    1. A summary of the company's business.
+    2. Key metrics like P/E Ratio, EPS, and Market Capitalization.
+    3. A concluding assessment of the company's financial health (e.g., Strong, Stable, Risky).
+
 analyze_technical_patterns:
   description: >
     Conduct a comprehensive technical analysis for the stock ticker: {ticker}.
-    You MUST use your web search tools to find the latest stock price.
-    Your analysis MUST be based on the MOST RECENT trading data from the last 24 hours.
-    **AGGRESSIVELY DISCARD any data, articles, or analysis older than this period.**
+    You MUST use the `get_comprehensive_technical_data` tool to get a full suite of indicators.
+    Do not use any other tools. Your analysis must be thorough and cover all provided data points.
   expected_output: >
-    A detailed technical report for {ticker}. The report must include:
-    1. The Current Stock Price you found using your search tools.
-    2. Overall Trend Assessment (Bullish, Bearish, Neutral).
-    3. Key Levels: Current Support and Resistance prices.
-    4. Indicator Status: Latest readings for RSI, MACD, and Bollinger Bands.
+    A detailed technical report for {ticker}. The report must interpret all the data provided by the tool.
+    Your report must be structured with these exact five sections:
+    1. Trend Analysis: Based on the SMA 50 and SMA 200 values. State the current trend direction. Note any Golden Cross or Death Cross signals found in the 'Crossover_Event' field.
+    2. Momentum Analysis: Based on the RSI and MACD indicators. State if the stock is overbought (RSI > 70), oversold (RSI < 30), or if MACD shows bullish/bearish momentum.
+    3. Volatility Analysis: Based on the Bollinger Bands. Are the bands wide (high volatility) or narrow (low volatility)? Is the price near the upper or lower band?
+    4. Volume Analysis: Based on the On-Balance Volume (OBV). Does volume confirm the current price trend? (e.g., "Rising OBV confirms the uptrend").
+    5. Concluding Assessment: A final summary of the overall technical picture (e.g., "Strongly Bullish", "Bearish with potential for reversal", "Neutral").
 
 analyze_market_sentiment:
   description: >
-    Investigate and summarize the market sentiment for {ticker}, focusing strictly on news and social media from the **last 48 hours**.
-    Search for the latest news headlines and social media discussions.
-    **If a source is from 2023 or any period older than 48 hours, you MUST explicitly state that you are IGNORING IT as outdated.**
+    Investigate and summarize the market sentiment for {ticker}.
+    You MUST use the `get_news_and_sentiment` tool to get the latest news and sentiment data.
+    Do not use any other tools.
   expected_output: >
-    A concise sentiment analysis report for {ticker} reflecting today's mood. It must include:
-    1. Overall Sentiment (Positive, Negative, Neutral, Mixed).
-    2. Key News/Catalysts from the last 48 hours ONLY.
-    3. Social Media Pulse from the last 48 hours ONLY.
+    A concise sentiment analysis report for {ticker}. It must include:
+    1. Overall Sentiment (Positive, Negative, Neutral, Mixed) based on the sentiment scores in the data.
+    2. A summary of 2-3 key news headlines and their potential impact.
 
 synthesize_trade_recommendation:
   description: >
-    You are the Chief Investment Strategist and your final task is to assemble a complete report for the user.
+    You are the Chief Investment Strategist. Your task is to assemble a complete report for {ticker}.
     The user's original query was: '{query}'.
-    You have been given context from other agents who have analyzed the following ticker: {ticker}.
-    Your job is to create a final report for THIS ONE TICKER.
-    First, you must decide if this stock, based on the provided analysis, is a good recommendation that FULFILLS the user's original query.
-    Then, create a report in the specified format. The summary section is the most important part to get right, as it must explain your reasoning and link back to the user's request.
+    You have been given the Fundamental, Technical, and Sentiment analysis reports.
+    Your job is to synthesize these three reports into a final, structured recommendation.
+    First, you must decide if this stock is a good candidate that FULFILLS the user's original query.
+    Then, create a report in the specified format, ensuring all fields are populated with real data from the previous reports. DO NOT MAKE UP DATA.
   expected_output: >
-    A final, structured investment advisory report for the SINGLE stock: {ticker}.
-    The report MUST start with a "---" separator and end with a "---" separator. Nothing else.
-    Use proper Markdown with a single space after colons and new lines between each section for perfect formatting.
-    All bullet points under 'Key Technicals', 'Key Sentiment', and 'Risks' MUST start with a '- ' (a dash followed by a space).
+    A final, structured investment advisory report for {ticker}.
+    The report MUST start and end with "---" separators. Nothing else.
+    Use proper Markdown. All bullet points MUST start with a '- '.
 
     ---
     **Ticker:** {ticker}
 
-    **Current Price:** [The price from the technical report]
-
     **Recommendation:** [Buy | Sell | Hold | Not Recommended]
-    *Your recommendation should be 'Buy' or 'Sell' ONLY if it strongly meets the user's original query criteria. Otherwise, it should be 'Hold' or 'Not Recommended'.*
+    *Base this on a holistic view of the data and the user's query.*
 
     **Confidence:** [High | Medium | Low]
 
     **Summary:**
     A concise paragraph explaining your reasoning.
     START by stating whether this stock meets the user's original criteria and why.
-    For example: "This stock is NOT a good candidate to meet your request for a low-risk trade because..." or "This stock is a strong candidate to meet your request because..."
-    Then, integrate the key technical and sentiment findings to justify your conclusion.
+    Then, integrate the key fundamental, technical, and sentiment findings to justify your conclusion.
+
+    **Key Fundamentals:**
+    - [A single bullet point summarizing the most critical fundamental finding (e.g., P/E ratio, company health).]
 
     **Key Technicals:**
-    - [A single bullet point summarizing the most critical and RECENT technical finding.]
+    - [A single bullet point summarizing the most critical technical finding from the 'Concluding Assessment' of the technical report (e.g., overall technical picture, crossover event).]
 
     **Key Sentiment:**
-    - [A single bullet point summarizing the most critical and RECENT sentiment finding.]
+    - [A single bullet point summarizing the most critical sentiment finding (e.g., overall positive news, a specific catalyst).]
 
     **Risks:**
-    - [A bullet point list of key immediate risks to consider.]
+    - [A bullet point list of key immediate risks based on the analyses (e.g., overbought RSI, negative news catalyst, high valuation).]
     ---
 
-# === NEW TASK ADDED AT THE END ===
+# --- SUMMARIZATION TASK (Unchanged) ---
 summarize_findings:
   description: >
     Review the collection of stock analyses provided in the context. The user's original request was: '{query}'.
     Your task is to write a final, top-level executive summary that will be presented to the user.
-    This summary must directly and clearly answer the user's original question.
   expected_output: >
     A final, user-friendly executive summary.
     1. Start with a direct answer to the user's query.
-       - If any stocks met the criteria, say something like: "Based on my analysis, I found [Number] stock(s) that meet your criteria for [user's criteria]. I would recommend considering [Ticker(s)]."
-       - If no stocks met the criteria, say something like: "Based on my analysis, I could not find any stocks that strongly met your criteria for [user's criteria] at this time. The candidates I evaluated showed too much risk or not enough upside."
-    2. Provide a brief, 2-3 sentence overview of the general market conditions or the reasons why candidates were or were not suitable.
-    3. Conclude by stating that the detailed reports for each evaluated stock are provided below for their review.
+    2. Provide a brief, 2-3 sentence overview of why candidates were or were not suitable.
+    3. Conclude by stating that the detailed reports for each evaluated stock are provided below.
