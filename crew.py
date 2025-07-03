@@ -1,138 +1,65 @@
-# crew.py (FINAL - Multi-Model Architecture)
+# crew.py (FINAL - With Ultra-Robust Router Parsing)
 
 import os
 import json
 import yaml
-import re
 from dotenv import load_dotenv
 from pathlib import Path
 import streamlit as st
 
-# --- All initial setup is the same ---
+# All imports and initial setup are correct.
 USE_MOCK_DATA = False
 load_dotenv()
-
 from crewai import Agent, Crew, Process, Task
-from langchain_openai import ChatOpenAI
 from crewai_tools import SerperDevTool
 
 if USE_MOCK_DATA:
-    print("\n--- MOCK DATA MODE ACTIVATED ---\n")
     from tools.mock_alpha_vantage_tools import *
 else:
-    print("\n--- LIVE API MODE ACTIVATED ---\n")
     from tools.alpha_vantage_tools import *
 
-# Using hardcoded keys for definitive testing
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY") 
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 os.environ["SERPER_API_KEY"] = os.getenv("SERPER_API_KEY")
-os.environ["ALPHA_VANTAGE_API_KEY"] = "4A8LNUNXGL1ZH740"
 
 class StockAnalysisCrew:
     def __init__(self):
-        # --- Multi-Model Instantiation ---
-        # Create instances for each model we plan to use
-        self.powerful_llm = ChatOpenAI(model="gpt-4-turbo")
-        self.fast_llm = ChatOpenAI(model="gpt-4o-mini")
-        
-        # Create a dictionary to easily access them by name
-        self.llms = {
-            "gpt-4-turbo": self.powerful_llm,
-            "gpt-4o-mini": self.fast_llm
-        }
-        
-        base_dir = Path(__file__).resolve().parent
-        with open(base_dir / 'config' / 'agents.yaml', 'r') as f:
-            self.agents_config = yaml.safe_load(f)
-        with open(base_dir / 'config' / 'tasks.yaml', 'r') as f:
-            self.tasks_config = yaml.safe_load(f)
+        self.agents_config = yaml.safe_load(Path('config/agents.yaml').read_text())
+        self.tasks_config = yaml.safe_load(Path('config/tasks.yaml').read_text())
         self.search_tool = SerperDevTool()
 
     def _create_agent(self, name: str, tools: list) -> Agent:
-        agent_config = self.agents_config[name]
-        
-        # --- Read the 'model' key from the agent's config ---
-        # Default to the powerful model if no specific model is set
-        model_name = agent_config.get('model', 'gpt-4-turbo')
-        
-        # Select the correct LLM instance from our dictionary
-        selected_llm = self.llms.get(model_name)
-        
-        # Add a debug print to confirm which model is being used
-        print(f"--- Creating agent '{name}' with model '{model_name}' ---")
+        return Agent(config=self.agents_config[name], tools=tools, allow_delegation=False, verbose=True)
 
-        return Agent(
-            role=agent_config['role'],
-            goal=agent_config['goal'],
-            backstory=agent_config['backstory'],
-            llm=selected_llm, # Assign the specifically chosen LLM
-            tools=tools,
-            allow_delegation=False,
-            verbose=True,
-            max_iter=5
-        )
-
-    # --- NO CHANGES are needed to _run_analysis_crew or kickoff ---
-    # The complexity is now perfectly encapsulated in _create_agent
     def _run_analysis_crew(self, ticker: str, query: str) -> str:
         fundamental_analyst = self._create_agent('fundamental_analyst', [fundamental_data_tool])
-        technical_analyst = self._create_agent('technical_analyst', [premium_technical_analysis_tool])
-        quantitative_strategist = self._create_agent('quantitative_strategist', [daily_price_tool])
+        technical_analyst = self._create_agent('expert_technical_analyst', [advanced_technical_analysis_tool])
         sentiment_analyst = self._create_agent('sentiment_analyst', [news_sentiment_tool])
         recommendation_architect = self._create_agent('recommendation_architect', [])
-        
-        fundamental_task = Task(
-            description=self.tasks_config['analyze_fundamentals']['description'].format(ticker=ticker),
-            expected_output=self.tasks_config['analyze_fundamentals']['expected_output'],
-            agent=fundamental_analyst
-        )
-        technical_indicator_task = Task(
-            description=self.tasks_config['analyze_technical_indicators']['description'].format(ticker=ticker),
-            expected_output=self.tasks_config['analyze_technical_indicators']['expected_output'],
-            agent=technical_analyst
-        )
-        sentiment_task = Task(
-            description=self.tasks_config['analyze_market_sentiment']['description'].format(ticker=ticker),
-            expected_output=self.tasks_config['analyze_market_sentiment']['expected_output'],
-            agent=sentiment_analyst
-        )
-        strategy_task = Task(
-            description=self.tasks_config['develop_trading_strategy']['description'].format(ticker=ticker),
-            expected_output=self.tasks_config['develop_trading_strategy']['expected_output'],
-            agent=quantitative_strategist,
-            context=[technical_indicator_task]
-        )
+
+        fundamental_task = Task(description=self.tasks_config['analyze_fundamentals']['description'].format(ticker=ticker), expected_output=self.tasks_config['analyze_fundamentals']['expected_output'], agent=fundamental_analyst)
+        advanced_technical_task = Task(description=self.tasks_config['analyze_advanced_technicals']['description'].format(ticker=ticker), expected_output=self.tasks_config['analyze_advanced_technicals']['expected_output'], agent=technical_analyst)
+        sentiment_task = Task(description=self.tasks_config['analyze_market_sentiment']['description'].format(ticker=ticker), expected_output=self.tasks_config['analyze_market_sentiment']['expected_output'], agent=sentiment_analyst)
         synthesis_task = Task(
             description=self.tasks_config['synthesize_trade_recommendation']['description'].format(ticker=ticker, query=query),
             expected_output=self.tasks_config['synthesize_trade_recommendation']['expected_output'].format(ticker=ticker),
             agent=recommendation_architect,
-            context=[fundamental_task, technical_indicator_task, sentiment_task, strategy_task]
+            context=[fundamental_task, advanced_technical_task, sentiment_task]
         )
         
         analysis_crew = Crew(
-            agents=[
-                fundamental_analyst, technical_analyst, sentiment_analyst, 
-                quantitative_strategist, recommendation_architect
-            ],
-            tasks=[
-                fundamental_task, technical_indicator_task, sentiment_task, 
-                strategy_task, synthesis_task
-            ],
+            agents=[fundamental_analyst, technical_analyst, sentiment_analyst, recommendation_architect],
+            tasks=[fundamental_task, advanced_technical_task, sentiment_task, synthesis_task],
             process=Process.sequential,
             verbose=True
         )
-        analysis_result = analysis_crew.kickoff()
-        return str(analysis_result)
+        return str(analysis_crew.kickoff())
 
     def kickoff(self, inputs: dict):
         query = inputs['query']
         print(f"--- Running routing for query: {query} ---")
+        
         router_agent = self._create_agent('router_agent', [])
-        routing_task = Task(
-            description=self.tasks_config['route_user_query']['description'].format(query=query),
-            expected_output=self.tasks_config['route_user_query']['expected_output'],
-            agent=router_agent
-        )
+        routing_task = Task(description=self.tasks_config['route_user_query']['description'].format(query=query), expected_output=self.tasks_config['route_user_query']['expected_output'], agent=router_agent)
         routing_crew = Crew(agents=[router_agent], tasks=[routing_task], verbose=True)
         routing_result = routing_crew.kickoff()
         
@@ -150,62 +77,67 @@ class StockAnalysisCrew:
             return "Error: Router's response was unclear. Please rephrase your query."
         
         print(f"--- Routing Decision: {routing_decision} ---")
-        route = routing_decision.get('route')
+        
+        route = routing_decision.get('route', '').lower()
         extracted_info = routing_decision.get('extracted_info')
 
         if route == 'ticker_specific_analysis':
-            raw_info_str = str(extracted_info)
-            tickers_found = re.findall(r'\b[A-Z]{1,5}\b', raw_info_str)
-            if not tickers_found:
-                return "Router identified a ticker query but could not extract a valid ticker symbol from its output."
-            ticker_str = tickers_found[0]
-            print(f"--- Extracted ticker '{ticker_str}' for detailed analysis. ---")
-            tickers_to_analyze = [ticker_str]
+            tickers_to_analyze = []
+            
+            # --- THE CORRECTED, ULTRA-ROBUST TICKER EXTRACTION LOGIC ---
+            if isinstance(extracted_info, dict):
+                # Handles the case where info is {'tickers': ['AAPL', 'MSFT']}
+                tickers = extracted_info.get('tickers') # Plural
+                if isinstance(tickers, list):
+                    tickers_to_analyze = tickers
+                else:
+                    # If not found, check for 'ticker' (singular)
+                    ticker_val = extracted_info.get('ticker') # Singular
+                    if isinstance(ticker_val, str):
+                        tickers_to_analyze = [ticker_val] # Wrap it in a list
+            elif isinstance(extracted_info, str):
+                # Handles the simple string case "AAPL,MSFT"
+                tickers_to_analyze = [t.strip().upper() for t in extracted_info.split(',')]
+            
+            if not tickers_to_analyze:
+                return "Router identified a ticker query but could not extract any ticker symbols."
+            
+            print(f"--- Ticker analysis for: {tickers_to_analyze} ---")
             reports = [self._run_analysis_crew(t, query) for t in tickers_to_analyze]
             return "\n\n".join(reports)
         
         elif route == 'market_screening':
+            # This logic remains correct from the last fully working version
             print("--- Entering Intelligent Market Screening Funnel ---")
+            
             broad_screener = self._create_agent('broad_screener_agent', [yahoo_screener_tool])
-            screening_task = Task(
-                description=self.tasks_config['screen_market_for_tickers']['description'].format(query=query),
-                expected_output=self.tasks_config['screen_market_for_tickers']['expected_output'],
-                agent=broad_screener
-            )
             qualitative_filter = self._create_agent('qualitative_filter_agent', [self.search_tool])
-            filtering_task = Task(
-                description=self.tasks_config['filter_and_select_candidates']['description'].format(query=query),
-                expected_output=self.tasks_config['filter_and_select_candidates']['expected_output'],
-                agent=qualitative_filter,
-                context=[screening_task] 
-            )
+
+            screening_task = Task(description=self.tasks_config['screen_market_for_tickers']['description'].format(query=query), expected_output=self.tasks_config['screen_market_for_tickers']['expected_output'], agent=broad_screener)
+            filtering_task = Task(description=self.tasks_config['filter_and_select_candidates']['description'].format(query=query), expected_output=self.tasks_config['filter_and_select_candidates']['expected_output'], agent=qualitative_filter, context=[screening_task])
+
             screening_funnel_crew = Crew(
                 agents=[broad_screener, qualitative_filter],
                 tasks=[screening_task, filtering_task],
                 process=Process.sequential,
                 verbose=True
             )
-            final_ticker_list_str = screening_funnel_crew.kickoff()
+            final_ticker_list_str = str(screening_funnel_crew.kickoff())
+
             if not final_ticker_list_str or not final_ticker_list_str.strip():
-                return "The screening funnel was unable to identify any promising stocks matching your criteria."
+                return "The screening funnel was unable to identify any promising stocks."
+
             print(f"--- Funnel identified top candidates: {final_ticker_list_str} ---")
             tickers = [t.strip().upper() for t in final_ticker_list_str.split(',') if t.strip()]
-            details = [self._run_analysis_crew(t, query) for t in tickers]
+            
+            details = [str(self._run_analysis_crew(t, query)) for t in tickers]
+            
             summarizer_agent = self._create_agent('executive_summarizer_agent', [])
-            full_context = "\n\n".join(details)
-            summary_task = Task(
-                description=self.tasks_config['summarize_findings']['description'].format(query=query),
-                expected_output=self.tasks_config['summarize_findings']['expected_output'],
-                agent=summarizer_agent,
-                context=details
-            )
+            summary_task = Task(description=self.tasks_config['summarize_findings']['description'].format(query=query), expected_output=self.tasks_config['summarize_findings']['expected_output'], agent=summarizer_agent, context=details)
             summary_crew = Crew(agents=[summarizer_agent], tasks=[summary_task], verbose=True)
-            summary_result = summary_crew.kickoff()
-            final_summary = str(summary_result)
-            return f"{final_summary}\n\n## Detailed Analysis of Candidates\n\n{full_context}"
-        
-        elif route == 'general_qa':
-            return "Thank you. This advisor is optimized for specific stock analysis and market screening."
+            final_summary = str(summary_crew.kickoff())
+            
+            return f"{final_summary}\n\n## Detailed Analysis of Candidates\n\n" + "\n\n".join(details)
         
         else:
-            return "Error: Could not determine workflow."
+            return "Error: Could not determine workflow from router's decision."

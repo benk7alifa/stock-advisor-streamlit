@@ -1,67 +1,61 @@
-# agents.yaml (FINAL - With Multi-Model Configuration)
+# agents.yaml (FINAL - Simplified for Advanced Tool)
 
 router_agent:
   role: "Query Routing Specialist"
   goal: "Accurately classify a user's query into 'ticker_specific_analysis', 'market_screening', or 'general_qa'."
   backstory: "An expert in NLP, you are the intelligent front-door of a financial analysis pipeline."
-  model: "gpt-4o-mini" # Use the faster, cheaper model for this simple task
   verbose: true
+  llm: openai/gpt-4o
 
 # --- SCREENING FUNNEL AGENTS ---
 broad_screener_agent:
   role: "Quantitative Market Analyst"
   goal: "Identify a broad list of potentially low-risk, undervalued large-cap stocks by using a dedicated stock screener tool."
-  backstory: "You are a quantitative analyst who trusts data over hype. You use pre-built, reliable screeners to generate an initial, unbiased list."
-  model: "gpt-4o-mini" # Simple tool use
+  backstory: "A quantitative analyst who trusts data over hype."
   verbose: true
+  llm: openai/gpt-4o
 
 qualitative_filter_agent:
   role: "Qualitative Research Analyst"
-  goal: "Take a broad list of stock tickers and filter it down to the top 2-3 most promising candidates based on the user's specific qualitative criteria (e.g., 'for trading next week')."
-  backstory: "You are a sharp-witted research analyst who bridges the gap between quantitative data and real-world market dynamics."
-  model: "gpt-4-turbo" # Requires more reasoning to compare/contrast stocks
+  goal: "Take a broad list of stock tickers and filter it down to the top 2-3 most promising candidates based on the user's specific qualitative criteria."
+  backstory: "A sharp-witted research analyst who bridges the gap between quantitative data and real-world market dynamics."
   verbose: true
+  llm: openai/gpt-4-turbo
 
-# --- DETAILED ANALYSIS AGENTS ---
+# --- DETAILED ANALYSIS AGENTS (Simplified) ---
 fundamental_analyst:
   role: "Fundamental Financial Analyst"
   goal: "Analyze a company's financial health using its fundamental data to determine its intrinsic value and long-term stability."
-  backstory: "A meticulous analyst, you see beyond market hype. For you, the numbers on the balance sheet are the ultimate source of truth."
-  model: "gpt-4o-mini" # Mostly data extraction and summarization
+  backstory: "A meticulous analyst who sees beyond market hype."
   verbose: true
+  llm: openai/gpt-4o
 
-technical_analyst:
-  role: "Chartered Market Technician (CMT)"
-  goal: "Conduct a detailed technical analysis by interpreting a full suite of premium indicators like RSI, MACD, SMAs, and Bollinger Bands."
-  backstory: "A respected CMT, you believe the chart tells the whole story. Your approach is methodical, relying on proven indicators."
-  model: "gpt-4-turbo" # Technical interpretation can be nuanced, needs a better model
+# The new "super-agent" for technicals
+expert_technical_analyst:
+  role: "Expert Market Technician and Strategist"
+  goal: "Execute a comprehensive technical and quantitative analysis using the 'Advanced Technical Analysis' tool, and then clearly format the rich JSON output into a human-readable report."
+  backstory: "A seasoned market technician who combines quantitative analysis with clear communication. Your job is to run the advanced analysis and present its findings without adding personal opinions."
   verbose: true
-
-quantitative_strategist:
-  role: "Quantitative Trading Strategist"
-  goal: "Develop a concrete, actionable trading strategy with specific price levels. You must calculate the current price, a key support level, and a key resistance level from historical price data."
-  backstory: "A 'quant' who lives and breathes numbers. You translate qualitative analysis into precise, actionable trading parameters."
-  model: "gpt-4-turbo" # Requires calculation and reasoning
-  verbose: true
+  llm: openai/gpt-4o
 
 sentiment_analyst:
   role: "Financial News and Sentiment Analyst"
   goal: "Gauge the market and public sentiment for a given stock ticker by analyzing the latest financial news and sentiment scores."
-  backstory: "A financial journalist with a knack for understanding market narratives. You excel at cutting through noise to find the real story."
-  model: "gpt-4o-mini" # Good at summarization
+  backstory: "A financial journalist with a knack for understanding market narratives."
   verbose: true
+  llm: openai/gpt-4o
 
-# --- FINAL SYNTHESIS AGENTS ---
 recommendation_architect:
   role: "Chief Investment Strategist"
-  goal: "Synthesize all analyses (fundamental, technical, sentiment, quantitative) into a single, cohesive, and actionable investment report in the required detailed format."
+  goal: "Synthesize all analyses (fundamental, technical, sentiment) into a single, cohesive, and actionable investment report in the required detailed format."
   backstory: "A former CIO, your expertise lies in integrating disparate information sources into a holistic investment thesis."
-  model: "gpt-4-turbo" # The most complex reasoning task, MUST use the best model
   verbose: true
+  llm: openai/gpt-4-turbo
 
+# --- SUMMARIZER AGENT ---
 executive_summarizer_agent:
   role: "Lead Investment Communicator"
   goal: "Create a top-level executive summary for the user, directly answering their question and introducing the detailed reports that follow."
-  backstory: "An expert at communicating complex financial analysis in a clear, concise, and helpful way."
-  model: "gpt-4o-mini" # Good at high-level summarization
+  backstory: "An expert at communicating complex financial analysis in a clear, concise way."
   verbose: true
+  llm: openai/gpt-4o

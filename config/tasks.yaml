@@ -1,58 +1,39 @@
-# tasks.yaml (FINAL - With Stricter Routing Task)
+# tasks.yaml (FINAL - With Advanced Technical Task)
 
 route_user_query:
+  description: "Analyze the user's query: '{query}'. Classify it as 'ticker_specific_analysis', 'market_screening', or 'general_qa'."
+  expected_output: "A JSON object with a 'route' key and an 'extracted_info' key."
+
+# --- SCREENING FUNNEL TASKS ---
+screen_market_for_tickers:
+  description: "Use the 'Yahoo Finance Stock Screener' tool to generate a broad list of undervalued large-cap stocks. The user's original query was: '{query}'."
+  expected_output: "A clean, comma-separated string of all stock ticker symbols found by the tool."
+
+filter_and_select_candidates:
   description: >
-    Analyze the user's query: '{query}'.
-    Classify it as 'ticker_specific_analysis', 'market_screening', or 'general_qa'.
-  expected_output: >
-    A JSON object with a 'route' key and an 'extracted_info' key.
-    - If route is 'ticker_specific_analysis', 'extracted_info' MUST be ONLY the comma-separated stock ticker(s) (e.g., "AAPL", "MSFT,GOOG"). DO NOT include any other words or sentences.
-    - If route is 'market_screening', 'extracted_info' should be a string containing the user's criteria.
-    - If route is 'general_qa', 'extracted_info' should be null.
-    
-    Example for ticker: {"route": "ticker_specific_analysis", "extracted_info": "MSFT"}
-    Example for screening: {"route": "market_screening", "extracted_info": "low risk stocks"}
+    You have been given a broad list of stock tickers. The user's original query was: '{query}'.
+    Your job is to filter this list down to the **top 2 or 3** most promising candidates that best match the user's qualitative criteria.
+    For each stock in the list, perform a web search to find recent news, analyst opinions, or upcoming catalysts.
+  expected_output: "A final, clean, comma-separated string of the 2-3 best ticker symbols."
 
-# --- The rest of the file is unchanged ---
-
+# --- DETAILED ANALYSIS TASKS ---
 analyze_fundamentals:
   description: "Conduct a comprehensive fundamental analysis for {ticker}, using the 'Get Company Overview & Fundamentals' tool."
   expected_output: "A report on the company's fundamentals, including key metrics and a financial health assessment."
 
-analyze_technical_indicators:
+analyze_advanced_technicals:
   description: >
-    Conduct a multi-faceted technical analysis for {ticker} by performing the following steps in order:
-    1.  Use the 'Get Trend and Momentum Indicators' tool to assess the current trend strength (ADX), direction (SMA), and momentum (RSI, MACD).
-    2.  Use the 'Get Volume and Volatility Indicators' tool to check if volume (OBV) confirms the trend and to assess volatility (ATR, Bollinger Bands).
-    3.  Use the 'Analyze for Golden/Death Cross Events' tool to identify any major long-term signals.
-    4.  Synthesize all three findings into a single, cohesive technical analysis report.
+    Your sole job is to use the 'Advanced Technical Analysis' tool for the stock ticker {ticker}.
+    Then, present the JSON output from the tool in a clean, human-readable report.
+    You must not add any interpretation of your own; your task is to simply call the tool and format its expert output.
   expected_output: >
-    A detailed technical analysis report with three clear sections:
-    1.  **Trend & Momentum:** An interpretation of SMA, MACD, RSI, and ADX.
-    2.  **Volume & Volatility:** An interpretation of OBV, ATR, and Bollinger Bands.
-    3.  **Key Crossover Events:** The result from the crossover analysis tool.
-    4.  **Overall Technical Outlook:** A final summary paragraph concluding whether the technical picture is Bullish, Bearish, or Neutral.
-
-develop_trading_strategy:
-  description: >
-    Develop a detailed trading strategy for {ticker}. You MUST use the 'Get Daily Stock Price History' tool to get the last 100 days of price data.
-    From the data, you must perform the following steps:
-    1.  **Identify the Current Price:** State the most recent closing price from the data.
-    2.  **Calculate Key Levels:**
-        *   Calculate Support: Find the lowest 'low' price from the last 30 days of data.
-        *   Calculate Resistance: Find the highest 'high' price from the last 30 days of data.
-    3.  **Formulate Trade Plans:** Based *only* on the Support and Resistance levels you calculated, create a Long and Short trade plan.
-        *   For the Long Plan, the entry should be slightly above the Current Price, the take profit near the Resistance, and the stop loss below the entry but above the Support.
-        *   For the Short Plan, the entry should be slightly below the Current Price, the take profit near the Support, and the stop loss above the Resistance.
-    4.  **Justify the Plan:** Write a brief sentence explaining the logic for your price levels, for example: "The long strategy aims to capture the upward movement towards the 30-day high, with a stop loss placed at a reasonable risk point."
-  expected_output: >
-    A structured report containing:
-    - Current Price: The most recent closing price.
-    - Support Level: The calculated support price.
-    - Resistance Level: The calculated resistance price.
-    - Justification: A brief explanation for the strategy.
-    - A detailed Long Trade Plan with Entry, Take Profit, and Stop Loss prices.
-    - A detailed Short Trade Plan with Entry, Take Profit, and Stop Loss prices.
+    A perfectly formatted summary of the technical analysis, directly reflecting the tool's output. The report must include:
+    - Latest Price
+    - Trend Analysis (50-day SMA, 200-day SMA, Conclusion)
+    - Momentum Analysis (RSI-14, Conclusion)
+    - Volume Analysis (Latest Volume, 30-day Avg, Conclusion)
+    - Volatility Analysis (ATR-14, Insight, Suggested Stop-Loss distance)
+    - A final Expert Summary sentence as provided by the tool.
 
 analyze_market_sentiment:
   description: "Investigate and summarize the market sentiment for {ticker}, using the 'Get News & Market Sentiment' tool."
@@ -60,68 +41,49 @@ analyze_market_sentiment:
 
 synthesize_trade_recommendation:
   description: >
-    You are the Chief Investment Strategist. Assemble a complete, professional investment report for {ticker}.
+    You are the Chief Investment Strategist. Your final task is to assemble a complete, professional investment report for {ticker}.
     The user's original query was: '{query}'.
-    You have been given four reports: Fundamental Analysis, a detailed Technical Analysis, a Trading Strategy Plan, and a Market Sentiment Analysis.
-    Synthesize all this information into a final report using the exact format specified in the 'expected_output'.
+    You have been given three expert reports: Fundamental Analysis, Advanced Technical Analysis, and Market Sentiment Analysis.
+    Your job is to synthesize all this information into a final report using the exact format specified below.
+    The 'Trading Strategy' section should be derived from the Advanced Technical Analysis report, using the latest price and the suggested stop-loss distance from the volatility analysis to calculate take-profit and stop-loss levels.
   expected_output: >
-    A final, beautifully formatted investment advisory report for {ticker}.
-    The report MUST start and end with "---" separators. Use proper Markdown.
-
+    A final, beautifully formatted investment advisory report.
     ---
     **Ticker:** {ticker}
     
-    **Current Price:** $[Extract from Trading Strategy Plan]
+    **Current Price:** $[Extract from the Advanced Technical Analysis report]
     
     **Recommendation:** [Buy | Sell | Hold]
     
-    **Confidence:** [High | Medium | Low] ([Provide a numeric percentage, e.g., (65%)])
+    **Confidence:** [High | Medium | Low] ([Provide a numeric percentage, e.g., (75%)])
     
     **Summary:**
-    A concise paragraph explaining your reasoning, integrating findings from all four analysis reports.
+    A concise paragraph explaining your reasoning. Justify your recommendation by integrating the conclusions from the fundamental, technical, and sentiment reports.
     
-    **Trading Strategy:**
-    *   **Strategy Rationale:** [Extract the 'Justification' from the Trading Strategy Plan.]
+    **Trading Strategy (Derived from Volatility Analysis):**
+    *   **Strategy Rationale:** The following trade plans are based on the calculated average true range (ATR) to provide a risk-to-reward ratio of approximately 2:1.
     *   **Long Trade Plan:**
-        *   Entry Price: $[Extract from Trading Strategy Plan]
-        *   Take Profit: $[Extract from Trading Strategy Plan]
-        *   Stop Loss: $[Extract from Trading Strategy Plan]
+        *   Entry: Suggest entry near the current price.
+        *   Take Profit: $[Current Price + (2 * Suggested Stop-Loss Distance)]
+        *   Stop Loss: $[Current Price - Suggested Stop-Loss Distance]
     *   **Short Trade Plan:**
-        *   Entry Price: $[Extract from Trading Strategy Plan]
-        *   Take Profit: $[Extract from Trading Strategy Plan]
-        *   Stop Loss: $[Extract from Trading Strategy Plan]
+        *   Entry: Suggest entry near the current price.
+        *   Take Profit: $[Current Price - (2 * Suggested Stop-Loss Distance)]
+        *   Stop Loss: $[Current Price + Suggested Stop-Loss Distance]
     
     **Key Data Points:**
-    *   **Fundamentals:** [A single bullet point summarizing the most critical finding from the Fundamental Analysis report.]
-    *   **Technicals:** [A single bullet aummarizing the overall technical outlook from the Technical Indicator Analysis report.]
-    *   **Sentiment:** [A single bullet point summarizing the most critical finding from the Market Sentiment Analysis report.]
+    *   **Trend:** [Extract the 'Conclusion' from the Trend Analysis section of the technical report.]
+    *   **Momentum:** [Extract the 'Conclusion' from the Momentum Analysis section.]
+    *   **Volume:** [Extract the 'Conclusion' from the Volume Analysis section (e.g., Above Average).]
     
     **Risks:**
-    - [A bullet point list of key immediate risks to consider, based on all available reports (e.g., overbought RSI, high valuation, negative news).]
+    - [A bullet point list of key immediate risks to consider, based on all reports (e.g., Overbought RSI, high valuation, negative news).]
     ---
-
-screen_market_for_tickers:
-  description: "Use the 'Yahoo Finance Stock Screener' tool to generate a broad list of undervalued large-cap stocks. The user's original query was: '{query}'."
-  expected_output: "A clean, comma-separated string of all stock ticker symbols found by the tool. E.g., 'AAPL, MSFT, GOOG, AMZN, JPM'."
-
-filter_and_select_candidates:
-  description: >
-    You have been given a broad list of stock tickers. The user's original query was: '{query}'.
-    Your job is to filter this list down to the **top 2 or 3** most promising candidates that best match the user's qualitative criteria.
-    For each stock in the list, perform a web search to find recent news, analyst opinions, or upcoming catalysts.
-    Select only the stocks that have a compelling reason to be traded in the short term, as per the user's request.
-  expected_output: "A final, clean, comma-separated string of the 2-3 best ticker symbols. E.g., 'MRK, PFE'."
 
 summarize_findings:
   description: >
     Review the collection of individual stock analysis reports provided in the context.
     The user's original request was: '{query}'.
     Your task is to act as a Lead Communicator and write a final, top-level executive summary for the user.
-    You must read through all the text reports provided and synthesize them into a clear answer.
   expected_output: >
-    A final, user-friendly executive summary.
-    1.  Start with a direct answer to the user's query.
-        *   If any stocks were found to be good candidates, say something like: "Based on my analysis, I found [Number] stock(s) that meet your criteria for [user's criteria]. I would recommend considering [Ticker(s)]."
-        *   If no stocks seem to meet the user's criteria, say something like: "After analyzing several potential candidates, I could not find any stocks that strongly met your specific criteria at this time."
-    2.  Provide a brief, 2-3 sentence overview of the general findings.
-    3.  Conclude by stating that the detailed reports for each evaluated stock are provided below.
+    A final, user-friendly executive summary that directly answers the user's query and introduces the detailed reports.
