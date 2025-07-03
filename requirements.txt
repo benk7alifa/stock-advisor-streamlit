@@ -13,3 +13,6 @@ pyyaml
 # Data fetching libraries
 requests
 alpha-vantage
+
+
+beautifulsoup4

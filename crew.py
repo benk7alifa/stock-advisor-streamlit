@@ -1,62 +1,46 @@
-# crew.py (FINAL - Corrected SyntaxError)
+# crew.py (FINAL - Multi-Model Architecture)
 
 import os
 import json
 import yaml
+import re
 from dotenv import load_dotenv
 from pathlib import Path
 import streamlit as st
 
-# --- DEVELOPMENT/PRODUCTION SWITCH ---
-USE_MOCK_DATA = False # Set to False to use the live API
-
-# Force load .env file at the very start
+# --- All initial setup is the same ---
+USE_MOCK_DATA = False
 load_dotenv()
 
 from crewai import Agent, Crew, Process, Task
 from langchain_openai import ChatOpenAI
 from crewai_tools import SerperDevTool
 
-# --- Conditional Tool Importing ---
 if USE_MOCK_DATA:
-    # This uses triple quotes for a valid multi-line string
-    print("""
----
---- MOCK DATA MODE ACTIVATED ---
----
-""")
-    from tools.mock_alpha_vantage_tools import (
-        fundamental_data_tool,
-        premium_technical_analysis_tool,
-        news_sentiment_tool,
-        daily_price_tool
-    )
+    print("\n--- MOCK DATA MODE ACTIVATED ---\n")
+    from tools.mock_alpha_vantage_tools import *
 else:
-    # This also uses triple quotes for a valid multi-line string
-    print("""
----
---- LIVE API MODE ACTIVATED ---
----
-""")
-    from tools.alpha_vantage_tools import (
-        fundamental_data_tool,
-        premium_technical_analysis_tool,
-        news_sentiment_tool,
-        daily_price_tool
-    )
+    print("\n--- LIVE API MODE ACTIVATED ---\n")
+    from tools.alpha_vantage_tools import *
 
-# API Key Handling
-try:
-    os.environ["OPENAI_API_KEY"] = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY"))
-    os.environ["SERPER_API_KEY"] = st.secrets.get("SERPER_API_KEY", os.getenv("SERPER_API_KEY"))
-    # Using the hardcoded key for testing
-    os.environ["ALPHA_VANTAGE_API_KEY"] = "4A8LNUNXGL1ZH740" 
-except (KeyError, FileNotFoundError, AttributeError):
-    pass
+# Using hardcoded keys for definitive testing
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY") 
+os.environ["SERPER_API_KEY"] = os.getenv("SERPER_API_KEY")
+os.environ["ALPHA_VANTAGE_API_KEY"] = "4A8LNUNXGL1ZH740"
 
 class StockAnalysisCrew:
     def __init__(self):
-        self.llm = ChatOpenAI(model="gpt-4o")
+        # --- Multi-Model Instantiation ---
+        # Create instances for each model we plan to use
+        self.powerful_llm = ChatOpenAI(model="gpt-4-turbo")
+        self.fast_llm = ChatOpenAI(model="gpt-4o-mini")
+        
+        # Create a dictionary to easily access them by name
+        self.llms = {
+            "gpt-4-turbo": self.powerful_llm,
+            "gpt-4o-mini": self.fast_llm
+        }
+        
         base_dir = Path(__file__).resolve().parent
         with open(base_dir / 'config' / 'agents.yaml', 'r') as f:
             self.agents_config = yaml.safe_load(f)
@@ -66,16 +50,30 @@ class StockAnalysisCrew:
 
     def _create_agent(self, name: str, tools: list) -> Agent:
         agent_config = self.agents_config[name]
+        
+        # --- Read the 'model' key from the agent's config ---
+        # Default to the powerful model if no specific model is set
+        model_name = agent_config.get('model', 'gpt-4-turbo')
+        
+        # Select the correct LLM instance from our dictionary
+        selected_llm = self.llms.get(model_name)
+        
+        # Add a debug print to confirm which model is being used
+        print(f"--- Creating agent '{name}' with model '{model_name}' ---")
+
         return Agent(
             role=agent_config['role'],
             goal=agent_config['goal'],
             backstory=agent_config['backstory'],
-            llm=self.llm,
+            llm=selected_llm, # Assign the specifically chosen LLM
             tools=tools,
             allow_delegation=False,
-            verbose=True
+            verbose=True,
+            max_iter=5
         )
 
+    # --- NO CHANGES are needed to _run_analysis_crew or kickoff ---
+    # The complexity is now perfectly encapsulated in _create_agent
     def _run_analysis_crew(self, ticker: str, query: str) -> str:
         fundamental_analyst = self._create_agent('fundamental_analyst', [fundamental_data_tool])
         technical_analyst = self._create_agent('technical_analyst', [premium_technical_analysis_tool])
@@ -146,39 +144,53 @@ class StockAnalysisCrew:
                 json_string = raw_output[json_start:json_end]
                 routing_decision = json.loads(json_string)
             else:
-                raise ValueError("No valid JSON object found in the router's output.")
+                raise ValueError("No valid JSON object found in router's output.")
         except (json.JSONDecodeError, ValueError) as e:
-            print(f"--- Error: Could not parse routing decision. Raw output: {routing_result}. Error: {e} ---")
-            return "Error: The router's response was unclear. Please rephrase your query."
+            print(f"--- Error parsing routing decision. Raw: {routing_result}. Error: {e} ---")
+            return "Error: Router's response was unclear. Please rephrase your query."
         
         print(f"--- Routing Decision: {routing_decision} ---")
         route = routing_decision.get('route')
         extracted_info = routing_decision.get('extracted_info')
 
         if route == 'ticker_specific_analysis':
-            if not extracted_info:
-                return "The router identified this as a ticker-specific query but could not extract a ticker."
-            tickers_to_analyze = [t.strip().upper() for t in extracted_info.split(',')]
+            raw_info_str = str(extracted_info)
+            tickers_found = re.findall(r'\b[A-Z]{1,5}\b', raw_info_str)
+            if not tickers_found:
+                return "Router identified a ticker query but could not extract a valid ticker symbol from its output."
+            ticker_str = tickers_found[0]
+            print(f"--- Extracted ticker '{ticker_str}' for detailed analysis. ---")
+            tickers_to_analyze = [ticker_str]
             reports = [self._run_analysis_crew(t, query) for t in tickers_to_analyze]
             return "\n\n".join(reports)
         
         elif route == 'market_screening':
-            screener_agent = self._create_agent('stock_screener_agent', [self.search_tool])
+            print("--- Entering Intelligent Market Screening Funnel ---")
+            broad_screener = self._create_agent('broad_screener_agent', [yahoo_screener_tool])
             screening_task = Task(
-                description=self.tasks_config['screen_market_for_tickers']['description'].format(query=extracted_info),
+                description=self.tasks_config['screen_market_for_tickers']['description'].format(query=query),
                 expected_output=self.tasks_config['screen_market_for_tickers']['expected_output'],
-                agent=screener_agent
+                agent=broad_screener
             )
-            screening_crew = Crew(agents=[screener_agent], tasks=[screening_task], verbose=True)
-            screening_result = screening_crew.kickoff()
-            ticker_list_str = str(screening_result)
-            
-            if not ticker_list_str.strip():
-                return "The market screener was unable to find any stocks matching your criteria."
-            
-            tickers = [t.strip().upper() for t in ticker_list_str.split(',')]
+            qualitative_filter = self._create_agent('qualitative_filter_agent', [self.search_tool])
+            filtering_task = Task(
+                description=self.tasks_config['filter_and_select_candidates']['description'].format(query=query),
+                expected_output=self.tasks_config['filter_and_select_candidates']['expected_output'],
+                agent=qualitative_filter,
+                context=[screening_task] 
+            )
+            screening_funnel_crew = Crew(
+                agents=[broad_screener, qualitative_filter],
+                tasks=[screening_task, filtering_task],
+                process=Process.sequential,
+                verbose=True
+            )
+            final_ticker_list_str = screening_funnel_crew.kickoff()
+            if not final_ticker_list_str or not final_ticker_list_str.strip():
+                return "The screening funnel was unable to identify any promising stocks matching your criteria."
+            print(f"--- Funnel identified top candidates: {final_ticker_list_str} ---")
+            tickers = [t.strip().upper() for t in final_ticker_list_str.split(',') if t.strip()]
             details = [self._run_analysis_crew(t, query) for t in tickers]
-            
             summarizer_agent = self._create_agent('executive_summarizer_agent', [])
             full_context = "\n\n".join(details)
             summary_task = Task(
@@ -190,11 +202,10 @@ class StockAnalysisCrew:
             summary_crew = Crew(agents=[summarizer_agent], tasks=[summary_task], verbose=True)
             summary_result = summary_crew.kickoff()
             final_summary = str(summary_result)
-            
             return f"{final_summary}\n\n## Detailed Analysis of Candidates\n\n{full_context}"
         
         elif route == 'general_qa':
-            return "Thank you for your question. This AI advisor is optimized for specific stock analysis and market screening."
+            return "Thank you. This advisor is optimized for specific stock analysis and market screening."
         
         else:
-            return "Error: The router failed to classify the query correctly. Please try again."
+            return "Error: Could not determine workflow."
