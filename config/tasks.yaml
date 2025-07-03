@@ -41,25 +41,19 @@ analyze_market_sentiment:
 
 synthesize_trade_recommendation:
   description: >
-    You are the Chief Investment Strategist. Your final task is to assemble a complete, professional investment report for {ticker}.
+    You are the Chief Investment Strategist. Assemble a complete, professional investment report for {ticker}.
     The user's original query was: '{query}'.
     You have been given three expert reports: Fundamental Analysis, Advanced Technical Analysis, and Market Sentiment Analysis.
-    Your job is to synthesize all this information into a final report using the exact format specified below.
-    The 'Trading Strategy' section should be derived from the Advanced Technical Analysis report, using the latest price and the suggested stop-loss distance from the volatility analysis to calculate take-profit and stop-loss levels.
+    Synthesize all this information into a final report using the exact format specified below.
   expected_output: >
     A final, beautifully formatted investment advisory report.
     ---
     **Ticker:** {ticker}
-    
     **Current Price:** $[Extract from the Advanced Technical Analysis report]
-    
     **Recommendation:** [Buy | Sell | Hold]
-    
     **Confidence:** [High | Medium | Low] ([Provide a numeric percentage, e.g., (75%)])
-    
     **Summary:**
     A concise paragraph explaining your reasoning. Justify your recommendation by integrating the conclusions from the fundamental, technical, and sentiment reports.
-    
     **Trading Strategy (Derived from Volatility Analysis):**
     *   **Strategy Rationale:** The following trade plans are based on the calculated average true range (ATR) to provide a risk-to-reward ratio of approximately 2:1.
     *   **Long Trade Plan:**
@@ -70,20 +64,27 @@ synthesize_trade_recommendation:
         *   Entry: Suggest entry near the current price.
         *   Take Profit: $[Current Price - (2 * Suggested Stop-Loss Distance)]
         *   Stop Loss: $[Current Price + Suggested Stop-Loss Distance]
-    
     **Key Data Points:**
     *   **Trend:** [Extract the 'Conclusion' from the Trend Analysis section of the technical report.]
     *   **Momentum:** [Extract the 'Conclusion' from the Momentum Analysis section.]
     *   **Volume:** [Extract the 'Conclusion' from the Volume Analysis section (e.g., Above Average).]
-    
     **Risks:**
-    - [A bullet point list of key immediate risks to consider, based on all reports (e.g., Overbought RSI, high valuation, negative news).]
+    - [A bullet point list of key immediate risks to consider.]
     ---
 
+# --- MODIFIED SUMMARIZER TASK ---
 summarize_findings:
   description: >
-    Review the collection of individual stock analysis reports provided in the context.
+    Review the following collection of individual stock analysis reports, which are provided as a single block of text.
     The user's original request was: '{query}'.
     Your task is to act as a Lead Communicator and write a final, top-level executive summary for the user.
+    You must read through all the text reports provided and synthesize them into a clear answer.
+    The full text of the reports to analyze is: 
+    {reports_text}
   expected_output: >
-    A final, user-friendly executive summary that directly answers the user's query and introduces the detailed reports.
+    A final, user-friendly executive summary.
+    1.  Start with a direct answer to the user's query.
+        *   If any stocks were found to be good candidates based on your analysis of the reports, say something like: "Based on my analysis, I found [Number] stock(s) that could meet your criteria for [user's criteria]. I would recommend considering [Ticker(s)]."
+        *   If no stocks from the reports seem to meet the user's original criteria, say something like: "After analyzing several potential candidates, I could not find any stocks that strongly met your specific criteria at this time."
+    2.  Provide a brief, 2-3 sentence overview of the general findings.
+    3.  Conclude by stating that the detailed reports for each evaluated stock are provided below for their review.
