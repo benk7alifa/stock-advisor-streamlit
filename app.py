@@ -1,87 +1,65 @@
-# app.py
+# app.py (FINAL - With ChromaDB/SQLite3 Fix for Deployment)
 
 import streamlit as st
+import sys
 
-# ─── MUST be the first Streamlit command ──────────────────────────────────────
-st.set_page_config(page_title="AI Stock Trading Advisor", page_icon="📈")
-# ────────────────────────────────────────────────────────────────────────────────
-
-# Optional: fix for Chromadb’s Linux-only sqlite3 requirement
+# --- THIS MUST BE THE VERY FIRST IMPORT IN YOUR SCRIPT ---
+# This is the magic snippet that swaps out the old sqlite3 version
 try:
-    import pysqlite3
-    import sys as _sys
-    _sys.modules['sqlite3'] = _sys.modules.pop('pysqlite3')
+    __import__('pysqlite3')
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 except ImportError:
     pass
+# -------------------------------------------------------------
 
-import sys
 import io
 import re
-
+from contextlib import redirect_stdout
 from crew import StockAnalysisCrew
 
+# Must be the first Streamlit command
+st.set_page_config(page_title="AI Stock Trading Advisor", page_icon="📈")
 
 def clean_ansi_codes(text: str) -> str:
-    """Strip ANSI escape codes (coloured-text artifacts) from a log string."""
+    """Strip ANSI escape codes from a log string."""
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
     return ansi_escape.sub('', text)
 
-
-class StreamlitLogHandler(io.StringIO):
-    """Capture print() output from CrewAI and render it live in Streamlit."""
-    def __init__(self, container):
-        super().__init__()
-        self.container = container
-        self.buffer = ""  # in-memory log buffer
-
-    def write(self, s):
-        cleaned = clean_ansi_codes(s)
-        self.buffer += cleaned
-        # render the entire buffer in a code block
-        self.container.code(self.buffer, language='bash')
-        # still print colored to your real terminal
-        sys.__stdout__.write(s)
-        super().write(s)
-
-    def flush(self):
-        sys.__stdout__.flush()
-
-
-# ─── UI LAYOUT ────────────────────────────────────────────────────────────────
+# --- UI LAYOUT ---
 st.title("📈 AI Stock Trading Advisor")
 st.markdown("Welcome! Enter your stock query below and let our AI crew analyze it for you.")
-st.markdown("*(Example: Should I buy more AAPL shares today?)*")
 
-user_query = st.text_input(
-    "Your Query:",
-    placeholder="e.g., Which stocks are showing bullish patterns right now?"
-)
+with st.form(key='query_form'):
+    user_query = st.text_input(
+        "Your Query:",
+        placeholder="e.g., Which stocks are showing bullish patterns right now?"
+    )
+    submit_button = st.form_submit_button(label='Analyze')
 
-if st.button("Analyze"):
-    if not user_query:
-        st.warning("Please enter a query to analyze.")
-    else:
+if submit_button and user_query:
+    st.markdown("---")
+    
+    with st.spinner("🤖 Crew is thinking... This may take several minutes for market screening..."):
+        log_stream = io.StringIO()
+        with redirect_stdout(log_stream):
+            try:
+                crew = StockAnalysisCrew()
+                result = crew.kickoff(inputs={'query': user_query})
+            except Exception as e:
+                st.error(f"An unexpected error occurred: {e}")
+                st.subheader("📋 Crew Process Log (on error)")
+                log_contents = clean_ansi_codes(log_stream.getvalue())
+                st.code(log_contents, language='bash')
+                st.stop()
+        
+        st.subheader("✅ Crew Process Completed")
+        with st.expander("Show Thinking Process"):
+            log_contents = clean_ansi_codes(log_stream.getvalue())
+            st.code(log_contents, language='bash')
+
         st.markdown("---")
-        st.subheader("🤖 Crew Thinking Process…")
+        st.subheader("Final Advisor’s Report")
+        st.markdown(result)
 
-        # create a blank container for our logs
-        log_container = st.empty()
-        original_stdout = sys.stdout
-
-        try:
-            # swap in our handler so print() from CrewAI streams here
-            sys.stdout = StreamlitLogHandler(log_container)
-            crew = StockAnalysisCrew()
-            result = crew.kickoff(inputs={'query': user_query})
-
-            # restore stdout
-            sys.stdout = original_stdout
-
-            st.markdown("---")
-            st.subheader("✅ Final Advisor’s Report")
-            st.markdown(result)
-
-        except Exception as e:
-            # always restore stdout on error
-            sys.stdout = original_stdout
-            st.error(f"An unexpected error occurred: {e}")
+elif submit_button and not user_query:
+    st.warning("Please enter a query to analyze.")

@@ -1,20 +1,12 @@
-# requirements.txt (Minimalist approach)
-
-# Core application frameworks
+# requirements.txt (with pysqlite3-binary fix for Streamlit Cloud)
 streamlit
 crewai
 crewai-tools
-
-# LLM and utility libraries
-langchain-openai
 python-dotenv
+langchain-openai
 pyyaml
-
-# Data fetching libraries
 requests
 alpha-vantage
-
-
 beautifulsoup4
-
 pandas
+pysqlite3-binary # <--- THIS IS THE CRITICAL FIX
